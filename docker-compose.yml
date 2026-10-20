@@ -1,0 +1,46 @@
+services:
+  gateway:
+    build:
+      context: ./gateway
+    container_name: microservice-gateway
+    ports:
+      - "8080:80"
+    depends_on:
+      - auth-backend
+      - frontend-service
+    networks:
+      - microservice_network
+
+  nats:
+    image: nats:2.14-alpine
+    container_name: microservice-nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: "-js -m 8222"
+    networks:
+      - microservice_network
+
+  auth-backend:
+    build:
+      context: ./flask-auth-service
+    container_name: microservice-auth-backend
+    volumes:
+      - ./flask-auth-service/instance:/app/instance
+    depends_on:
+      - nats
+    networks:
+      - microservice_network
+
+  frontend-service:
+    build:
+      context: ./frontend-service
+    container_name: microservice-frontend
+    depends_on:
+      - nats
+    networks:
+      - microservice_network
+
+networks:
+  microservice_network:
+    driver: bridge

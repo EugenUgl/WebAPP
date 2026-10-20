@@ -1,0 +1,15 @@
+# 1. Стираем старый контейнер
+docker rm -f my-auth-container
+
+# 2. Собираем образ заново с исправленным кодом
+docker build -t flask-auth .
+
+# 3. Запускаем чистый контейнер
+docker run -d -p 5000:5000 --name my-auth-container flask-auth
+
+
+# Старт оркестратора
+docker compose up --build -d
+
+# Пересборка gateway
+docker compose up --build -d gateway
