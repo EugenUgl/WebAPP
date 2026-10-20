@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Зависимости тестов frontend (контекст сборки — корень репозитория)
+RUN pip install --no-cache-dir \
+    --trusted-host pypi.org --trusted-host pypi.pythonhosted.org --trusted-host files.pythonhosted.org \
+    flask==3.0.3 nats-py==2.9.0 pytest==8.2.0 pytest-mock==3.14.0 pytest-asyncio==0.23.8
+
+COPY frontend-service/ frontend-service/
+COPY tests/ tests/
+COPY pyproject.toml conftest.py ./
+
+# Отключаем фоновый поток NATS (см. guard в app.py)
+ENV TESTING=1
+
+CMD ["pytest", "tests/frontend", "-v"]

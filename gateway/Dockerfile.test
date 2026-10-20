@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Зависимости тестов шлюза (контекст сборки — корень репозитория)
+RUN pip install --no-cache-dir \
+    --trusted-host pypi.org --trusted-host pypi.pythonhosted.org --trusted-host files.pythonhosted.org \
+    flask==3.0.3 requests==2.31.0 pytest==8.2.0 pytest-mock==3.14.0 pytest-asyncio==0.23.8
+
+COPY gateway/ gateway/
+COPY tests/ tests/
+COPY pyproject.toml conftest.py ./
+
+CMD ["pytest", "tests/gateway", "-v"]

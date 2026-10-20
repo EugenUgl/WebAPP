@@ -25,6 +25,9 @@ services:
     build:
       context: ./flask-auth-service
     container_name: microservice-auth-backend
+    environment:
+      # В продакшене задаётся через .env (SECRET_KEY=...) — не хранить в коде.
+      SECRET_KEY: "${SECRET_KEY:-dev-secret-key-change-me}"
     volumes:
       - ./flask-auth-service/instance:/app/instance
     depends_on:

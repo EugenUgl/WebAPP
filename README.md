@@ -15,6 +15,26 @@
    docker compose logs -f frontend-service
    ```
 
+## 🧪 Тестирование
+
+Юнит-тесты запускаются **в Docker-контейнерах** (по одному на сервис), изолированно от рабочего стека:
+
+```bash
+# Все наборы сразу (сборка образов и прогон)
+docker compose -f docker-compose.test.yml up --build
+
+# Каждый набор по отдельности (удобно для CI — свой код выхода)
+docker compose -f docker-compose.test.yml run --rm gateway-tests
+docker compose -f docker-compose.test.yml run --rm auth-tests
+docker compose -f docker-compose.test.yml run --rm frontend-tests
+```
+
+*   `gateway-tests` — маршрутизация, проброс заголовков/куки/тела, перезапись `Location`, 502 (10 тестов).
+*   `auth-tests` — модели, регистрация/вход/выход, защита `/dashboard`, публикация события (16 тестов).
+*   `frontend-tests` — лендинг и обработчик `user.registered` (3 теста).
+
+Тестовые БД и фоновые подключения к NATS изолированы от боевых (`DATABASE_URL`, `TESTING=1`).
+
 ## 📚 Документация
 
 Вся подробная документация проекта находится в папке `docs/`:

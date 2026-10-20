@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Зависимости тестов auth-бэкенда (контекст сборки — корень репозитория)
+RUN pip install --no-cache-dir \
+    --trusted-host pypi.org --trusted-host pypi.pythonhosted.org --trusted-host files.pythonhosted.org \
+    flask==3.0.3 flask-sqlalchemy==3.1.1 flask-login==0.6.3 nats-py==2.9.0 \
+    pytest==8.2.0 pytest-mock==3.14.0
+
+COPY flask-auth-service/ flask-auth-service/
+COPY tests/ tests/
+COPY pyproject.toml conftest.py ./
+
+# Тестовая БД изолирована от продуктовой (instance/)
+ENV DATABASE_URL=sqlite:////tmp/microservice_test.db
+
+CMD ["pytest", "tests/auth", "-v"]

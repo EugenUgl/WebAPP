@@ -1,9 +1,13 @@
-from flask import Flask, render_template_string
 import asyncio
-import nats
 import json
-import threading
 import logging
+import os
+import threading
+
+import nats
+from flask import Flask, render_template_string
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -33,11 +37,14 @@ HTML_INDEX = """
 
 # --- Логика слушателя NATS JetStream ---
 
+
 async def message_handler(msg):
     data = json.loads(msg.data.decode())
-    print(f"\n[Frontend] 🎉 ПОЛУЧЕНО СОБЫТИЕ от NATS JetStream!")
-    print(f"[Frontend] Новый пользователь: {data.get('username')}\n")
-    await msg.ack() # Подтверждаем обработку сообщения
+    logger.info(
+        "🎉 ПОЛУЧЕНО СОБЫТИЕ от NATS JetStream! Новый пользователь: %s", data.get("username")
+    )
+    await msg.ack()  # Подтверждаем обработку сообщения
+
 
 async def listen_to_nats():
     # Даем NATS время на запуск
@@ -49,38 +56,42 @@ async def listen_to_nats():
         # Подписываемся на поток. Durable означает, что мы запомним,
         # на каком сообщении остановились, если контейнер перезагрузится.
         sub = await js.pull_subscribe(
-            subject="user.registered",
-            durable="frontend_consumer",
-            stream="USER_EVENTS"
+            subject="user.registered", durable="frontend_consumer", stream="USER_EVENTS"
         )
-        print("[Frontend] Успешно подключились к NATS. Слушаем события...")
-        
+        logger.info("[Frontend] Успешно подключились к NATS. Слушаем события...")
+
         while True:
             try:
                 # Ждем до 1 секунды пачку из 1 сообщения
                 msgs = await sub.fetch(batch=1, timeout=1)
                 for msg in msgs:
                     await message_handler(msg)
-            except asyncio.TimeoutError:
-                continue # Сообщений нет, идем на новый круг
+            except TimeoutError:
+                continue  # Сообщений нет, идем на новый круг
             except Exception as e:
-                print(f"Ошибка в цикле слушателя: {e}")
+                logger.error("Ошибка в цикле слушателя: %s", e)
                 await asyncio.sleep(1)
     except Exception as e:
-        print(f"[Frontend] Не удалось подключиться к NATS: {e}")
+        logger.error("[Frontend] Не удалось подключиться к NATS: %s", e)
+
 
 def run_nats_listener():
     # Запускаем бесконечный асинхронный цикл в отдельном потоке
     asyncio.run(listen_to_nats())
 
-# Стартуем фоновый поток ДО запуска Flask
-threading.Thread(target=run_nats_listener, daemon=True).start()
+
+# Стартуем фоновый поток ДО запуска Flask.
+# В тестовом окружении (TESTING=1) фоновый слушатель NATS не запускается.
+if os.environ.get("TESTING") != "1":
+    threading.Thread(target=run_nats_listener, daemon=True).start()
 
 # --- Маршруты Flask ---
 
-@app.route('/')
+
+@app.route("/")
 def index():
     return render_template_string(HTML_INDEX)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)

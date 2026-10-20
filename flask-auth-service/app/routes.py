@@ -1,12 +1,13 @@
 # app/routes.py
-from flask import Blueprint, render_template_string, request, redirect, url_for, flash
-from flask_login import login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User
-from . import db
-from .events import publish_user_registered # <-- Импорт нашей функции
+from flask import Blueprint, flash, redirect, render_template_string, request, url_for
+from flask_login import login_required, login_user, logout_user
+from werkzeug.security import check_password_hash, generate_password_hash
 
-auth = Blueprint('auth', __name__)
+from . import db
+from .events import publish_user_registered  # <-- Импорт нашей функции
+from .models import User
+
+auth = Blueprint("auth", __name__)
 
 # --- HTML-шаблоны ---
 
@@ -63,49 +64,53 @@ HTML_DASHBOARD = """
 
 # --- Маршруты ---
 
-@auth.route('/register', methods=['GET', 'POST'])
+
+@auth.route("/register", methods=["GET", "POST"])
 def register():
-    if request.method == 'POST':
-        username = request.form.get('username').strip()
-        password = request.form.get('password')
-        
+    if request.method == "POST":
+        username = request.form.get("username").strip()
+        password = request.form.get("password")
+
         if User.query.filter_by(username=username).first():
-            flash('Этот логин уже занят!')
-            return redirect(url_for('auth.register'))
-        
+            flash("Этот логин уже занят!")
+            return redirect(url_for("auth.register"))
+
         new_user = User(username=username, password_hash=generate_password_hash(password))
         db.session.add(new_user)
         db.session.commit()
-        
+
         # Отправляем событие в NATS
         publish_user_registered(new_user.username)
-        
-        flash('Регистрация успешна! Войдите.')
-        return redirect(url_for('auth.login'))
+
+        flash("Регистрация успешна! Войдите.")
+        return redirect(url_for("auth.login"))
 
     return render_template_string(HTML_REGISTER)
 
-@auth.route('/login', methods=['GET', 'POST'])
+
+@auth.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
-        username = request.form.get('username').strip()
-        password = request.form.get('password')
+    if request.method == "POST":
+        username = request.form.get("username").strip()
+        password = request.form.get("password")
         user = User.query.filter_by(username=username).first()
-        
+
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
-            return redirect(url_for('auth.dashboard'))
-        flash('Неверный логин или пароль!')
+            return redirect(url_for("auth.dashboard"))
+        flash("Неверный логин или пароль!")
 
     return render_template_string(HTML_LOGIN)
 
-@auth.route('/dashboard')
+
+@auth.route("/dashboard")
 @login_required
 def dashboard():
     return render_template_string(HTML_DASHBOARD)
 
-@auth.route('/logout')
+
+@auth.route("/logout")
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('auth.login'))
+    return redirect(url_for("auth.login"))

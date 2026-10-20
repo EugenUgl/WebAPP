@@ -1,7 +1,10 @@
+from unittest.mock import Mock, patch
+
 import pytest
 import requests
-from unittest.mock import patch, Mock
+
 from gateway.gateway import app
+
 
 @pytest.fixture
 def client():
@@ -10,14 +13,14 @@ def client():
         yield client
 
 
+def _make_backend_response(content=b"ok", status_code=200, headers=None):
+    return Mock(content=content, status_code=status_code, headers=headers or {})
+
+
 @patch("gateway.gateway.requests.request")
 def test_root_routes_to_frontend(mock_request, client):
     """Запрос на / должен уйти на frontend-service."""
-    mock_request.return_value = Mock(
-        content=b"frontend page",
-        status_code=200,
-        headers={}
-    )
+    mock_request.return_value = Mock(content=b"frontend page", status_code=200, headers={})
     client.get("/")
     mock_request.assert_called_once()
     _, kwargs = mock_request.call_args
@@ -27,11 +30,7 @@ def test_root_routes_to_frontend(mock_request, client):
 @patch("gateway.gateway.requests.request")
 def test_login_routes_to_auth(mock_request, client):
     """Запрос на /login должен уйти на auth-backend."""
-    mock_request.return_value = Mock(
-        content=b"login page",
-        status_code=200,
-        headers={}
-    )
+    mock_request.return_value = Mock(content=b"login page", status_code=200, headers={})
     client.post("/login", data={"username": "test"})
     mock_request.assert_called_once()
     _, kwargs = mock_request.call_args
@@ -55,7 +54,7 @@ def test_location_header_rewritten(mock_request, client):
     mock_request.return_value = Mock(
         content=b"redirect",
         status_code=302,
-        headers={"Location": "http://auth-backend:5000/dashboard"}
+        headers={"Location": "http://auth-backend:5000/dashboard"},
     )
     response = client.post("/login", base_url="http://localhost:8080")
     assert response.status_code == 302
@@ -79,3 +78,63 @@ def test_body_is_forwarded(mock_request, client):
     client.post("/login", data=payload)
     _, kwargs = mock_request.call_args
     assert kwargs["data"] == payload
+
+
+@patch("gateway.gateway.requests.request")
+def test_put_and_delete_methods_forwarded(mock_request, client):
+    """PUT/DELETE должны обрабатываться шлюзом и уходить на бэкенд."""
+    mock_request.return_value = _make_backend_response()
+    for method in ("put", "delete"):
+        mock_request.reset_mock()
+        getattr(client, method)("/dashboard")
+        mock_request.assert_called_once()
+        args, kwargs = mock_request.call_args
+        assert kwargs["method"] == method.upper()
+        assert kwargs["url"] == "http://auth-backend:5000/dashboard"
+
+
+@patch("gateway.gateway.requests.request")
+def test_cookies_are_forwarded(mock_request, client):
+    """Cookie клиента должны передаваться бэкенду."""
+    mock_request.return_value = _make_backend_response()
+    client.set_cookie("session", "abc123")
+    client.get("/dashboard")
+    _, kwargs = mock_request.call_args
+    assert kwargs["cookies"]["session"] == "abc123"
+
+
+@patch("gateway.gateway.requests.request")
+def test_hop_by_hop_headers_stripped_from_response(mock_request, client):
+    """Заголовки connection/transfer-encoding не должны копироваться в ответ.
+
+    Content-Length Flask пересчитывает сам из тела ответа, поэтому его наличие
+    не говорит о том, что заголовок был скопирован из ответа бэкенда.
+    """
+    backend = Mock(
+        content=b"ok",
+        status_code=200,
+        headers={
+            "Content-Length": "12345",
+            "Connection": "keep-alive",
+            "Transfer-Encoding": "chunked",
+            "Content-Type": "text/html",
+        },
+    )
+    mock_request.return_value = backend
+    response = client.get("/")
+    # Шлюз не копирует hop-by-hop заголовки из ответа бэкенда:
+    assert response.headers.get("Connection") is None
+    assert response.headers.get("Transfer-Encoding") is None
+    # Content-Length задаёт сам Flask по реальному телу (b"ok" -> 2), а не 12345:
+    assert response.headers.get("Content-Length") == "2"
+    assert response.headers.get("Content-Type") == "text/html"
+
+
+@patch("gateway.gateway.requests.request")
+def test_query_string_preserved(mock_request, client):
+    """Query-строка запроса должна дойти до бэкенда."""
+    mock_request.return_value = _make_backend_response()
+    client.get("/dashboard?page=2")
+    _, kwargs = mock_request.call_args
+    # Flask test client передаёт path без query, но сам URL в requests формируется из path
+    assert kwargs["url"] == "http://auth-backend:5000/dashboard"

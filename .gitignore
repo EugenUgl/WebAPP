@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Тесты и линтеры
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+
+# Локальные базы данных (данные сервисов не коммитим)
+*.db
+*.sqlite
+*.sqlite3
+
+# Окружение и IDE
+.env
+.idea/
+.vscode/
+*.swp
