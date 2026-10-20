@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  gateway-tests:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile.test
+    volumes:
+      - ./gateway:/app/gateway
+      - ./tests:/app/tests
+    working_dir: /app
+    command: pytest tests/gateway -v
